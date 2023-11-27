@@ -1,45 +1,94 @@
 const fs = require('fs');
 const path = require('path');
+const readline = require('readline');
+const { performance, PerformanceObserver } = require('perf_hooks');
 
-function calcularFibonacci(n) {
+// Utilidad para medir el tiempo de ejecución
+const performanceObserver = new PerformanceObserver((items) => {
+  items.getEntries().forEach((entry) => {
+    console.log(`${entry.name}: ${entry.duration.toFixed(2)}ms`);
+  });
+});
+performanceObserver.observe({ entryTypes: ['measure'] });
+
+function calculeFibonacci(n) {
   if (n < 2) {
     return n;
   }
-  return calcularFibonacci(n - 1) + calcularFibonacci(n - 2);
+  return calculeFibonacci(n - 1) + calculeFibonacci(n - 2);
 }
 
-function escribirYLeerArchivo(iteraciones) {
-  let totalLength = 0;
-  for (let i = 0; i < iteraciones; i++) {
-    const contenido = 'Datos de prueba '.repeat(10000); // Genera una cadena grande
-    const nombreArchivo = path.join(__dirname, `archivo_prueba_${i}.txt`);
+function writeFileAsync(content, filename) {
+  return fs.promises.writeFile(filename, content);
+}
 
-    fs.writeFileSync(nombreArchivo, contenido);
-    const leido = fs.readFileSync(nombreArchivo, 'utf8');
-    fs.unlinkSync(nombreArchivo); // Elimina el archivo después de leerlo
-    totalLength += leido.length;
+function readFileAsync(filename) {
+  return fs.promises.readFile(filename, 'utf8');
+}
+
+function deleteFileAsync(filename) {
+  return fs.promises.unlink(filename);
+}
+
+async function writeAndReadFileAsync(iterations) {
+  let length = 0;
+  for (let i = 0; i < iterations; i++) {
+    const content = 'Datos de prueba '.repeat(10000);
+    const filename = path.join(__dirname, `archivo_prueba_${i}.txt`);
+
+    await writeFileAsync(content, filename);
+    const readed = await readFileAsync(filename);
+    await deleteFileAsync(filename);
+
+    length += readed.length;
   }
-  return totalLength;
+  return length;
 }
 
-function realizarCalculosIntensivos() {
-  let suma = 0;
+function getCalcules() {
+  let sum = 0;
   for (let i = 0; i < 1000000; i++) {
-    suma += Math.sqrt(i);
+    sum += Math.sqrt(i);
   }
-  return suma;
+  return sum;
 }
 
-// Parámetros configurables
-const numeroFibonacci = 35; // Ajusta este valor según sea necesario
-const iteracionesArchivo = 50; // Número de veces que se abre y escribe en el archivo
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
 
-console.time('Tiempo de cálculo total');
-const resultadoFibonacci = calcularFibonacci(numeroFibonacci);
-const tamanoArchivo = escribirYLeerArchivo(iteracionesArchivo);
-const resultadoCalculos = realizarCalculosIntensivos();
-console.timeEnd('Tiempo de cálculo total');
+rl.question('Ingrese el número para el cálculo de Fibonacci: ', async (numFib) => {
+  const numberFibonacci = parseInt(numFib, 10);
 
-console.log(`Resultado Fibonacci: ${resultadoFibonacci}`);
-console.log(`Tamaño total de datos procesados en archivos: ${tamanoArchivo}`);
-console.log(`Resultado de cálculos intensivos: ${resultadoCalculos}`);
+  rl.question('Ingrese el número de iteraciones para las operaciones de archivo: ', async (numIter) => {
+    const iterationsFile = parseInt(numIter, 10);
+
+    console.time('Tiempo de cálculo total');
+    performance.mark('inicioFibonacci');
+    const resultFibonacci = calculeFibonacci(numberFibonacci);
+    performance.mark('finFibonacci');
+    performance.measure('Tiempo Fibonacci', 'inicioFibonacci', 'finFibonacci');
+
+    performance.mark('inicioArchivo');
+    const lengthFile = await writeAndReadFileAsync(iterationsFile);
+    performance.mark('finArchivo');
+    performance.measure('Tiempo Archivo', 'inicioArchivo', 'finArchivo');
+
+    performance.mark('inicioCalculos');
+    const resultCalcules = getCalcules();
+    performance.mark('finCalculos');
+    performance.measure('Tiempo Calculos', 'inicioCalculos', 'finCalculos');
+
+    console.timeEnd('Tiempo de cálculo total');
+
+    console.log(`Resultado Fibonacci: ${resultFibonacci}`);
+    console.log(`Tamaño total de datos procesados en archivos: ${lengthFile}`);
+    console.log(`Resultado de cálculos intensivos: ${resultCalcules}`);
+
+    // Registro del uso de memoria
+    console.log(`Uso de memoria: ${JSON.stringify(process.memoryUsage())}`);
+
+    rl.close();
+  });
+});
